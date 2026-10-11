@@ -1,0 +1,90 @@
+<!DOCTYPE html><html lang="en"><head><title>Customer database acceptance</title><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-udSR6/f54LbJ7+ePXUkTj9CuSYOJzUwiSVNv6hpU2rU='; img-src 'self' file:; style-src 'unsafe-inline'; font-src 'self' file:; form-action 'none'; base-uri 'none'; connect-src https://oveqrtyaquwgtkverrnl.supabase.co; frame-src 'none'; object-src 'none'"><style>*,*::before,*::after{box-sizing:border-box}body{margin:0}img{max-width:100%}body{font:16px system-ui;padding:20px}label{display:block}input,button{margin:6px}article{border:1px solid;padding:12px}[hidden]{display:none!important}@media(prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important;scroll-behavior:auto!important}}</style></head><body><h1>Database acceptance test</h1><form data-mibbi-form="signup"><h2>signup</h2><label>Email<input name="email" type="email"></label><label>Password<input name="password" type="password"></label><button type="submit">signup</button><p data-mibbi-status=""></p></form><form data-mibbi-form="login"><h2>login</h2><label>Email<input name="email" type="email"></label><label>Password<input name="password" type="password"></label><button type="submit">login</button><p data-mibbi-status=""></p></form><span data-mibbi-email=""></span><button data-mibbi-action="logout" type="button">Log out</button><form data-mibbi-form="insert:notes"><label>Title<input name="title"></label><label>Amount<input name="amount" type="number"></label><label>Done<input name="done" type="checkbox"></label><label>Date<input name="day" type="date"></label><label>File<input name="attachment" type="file"></label><button type="submit">Save note</button><p data-mibbi-status=""></p></form><div data-mibbi-list="notes"><article data-mibbi-row=""><span data-mibbi-field="title"></span><span data-mibbi-field="amount"></span><span data-mibbi-field="done"></span><span data-mibbi-field="day"></span><a data-mibbi-field="attachment">File</a><form data-mibbi-form="update:notes"><label>Title<input name="title"></label><label>Amount<input name="amount" type="number"></label><label>Done<input name="done" type="checkbox"></label><label>Date<input name="day" type="date"></label><label>File<input name="attachment" type="file"></label><button type="submit">Update note</button><p data-mibbi-status=""></p></form><button data-mibbi-delete="notes" type="button">Delete note</button></article><p data-mibbi-status=""></p></div><a href="records.html">Records page</a><script id="mibbi-database-config" type="application/json">{"contract":{"auth":true,"tables":[{"name":"notes","access":"owner","columns":[{"name":"title","type":"text"},{"name":"amount","type":"number"},{"name":"done","type":"boolean"},{"name":"day","type":"date"},{"name":"attachment","type":"file"}]}],"storage":true,"version":1},"pages":[{"slug":"home","href":"index.html"},{"slug":"records","href":"records.html"}],"connection":{"projectRef":"oveqrtyaquwgtkverrnl","url":"https://oveqrtyaquwgtkverrnl.supabase.co","publishableKey":"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im92ZXFydHlhcXV3Z3RrdmVycm5sIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTE3MjcyOTUsImV4cCI6MjEwNzMwMzI5NX0.UwWLTvRgGVMQ3xeqmwcyDPaNAOIv6zpXenmtIx2dbZY","namespace":"mb_4be82b6abf534739964887b84f1f5bc8"},"preview":false,"live":true}</script><script>(function(){
+"use strict";
+var node=document.getElementById("mibbi-database-config"), config;
+try{config=JSON.parse(node.textContent);}catch{return;}
+var session=null, sessionChanged=false, timer=null, pendingRefresh=null, lists=[];
+var scope=config.connection?config.connection.namespace+":"+config.connection.projectRef:"";
+var parentOrigin="";try{var origin=new URL(window.location.href).origin;if(/^https?:\/\//.test(origin))parentOrigin=origin;}catch{}
+function bridge(type,extra){if(window.parent!==window&&scope&&parentOrigin)window.parent.postMessage(Object.assign({type:type,scope:scope},extra||{}),parentOrigin);}
+var connected=!!config.connection, base=connected?config.connection.url:"", key=connected?config.connection.publishableKey:"", ns=connected?config.connection.namespace:"";
+function table(name){return config.contract.tables.find(function(t){return t.name===name;});}
+function status(root,text){var p=root.querySelector("[data-mibbi-status]");if(!p){p=document.createElement("p");p.setAttribute("data-mibbi-status","");p.setAttribute("role","status");root.appendChild(p);}p.textContent=text;}
+function message(error){return error&&error.message?error.message:"The request could not finish. Please try again.";}
+async function call(path,options){
+ if(!connected)throw Error("Connect Supabase and apply this website's database plan before using this feature.");
+ if(config.preview&&!config.live)throw Error("Database access is off in preview. Enable Use live database in the Database panel to test.");
+ var headers=Object.assign({apikey:key},options&&options.headers);
+ if(session&&(path.startsWith("/rest/v1/")||path.startsWith("/storage/v1/")||path==="/auth/v1/logout"))headers.Authorization="Bearer "+session.access_token;
+ var response=await fetch(base+path,Object.assign({},options,{headers:headers,credentials:"omit",redirect:"error",signal:AbortSignal.timeout(20000)}));
+ if(!response.ok){if(response.status===401){saveSession(null);}throw Error(response.status===401||response.status===403?"Please sign in and check your access to this record.":response.status===429?"Too many requests. Please wait before trying again.":"The database could not complete this request. Check the connection and try again.");}
+ if(response.status===204)return null;
+ return response.json();
+}
+function renderSession(){document.querySelectorAll("[data-mibbi-session]").forEach(function(el){el.hidden=el.getAttribute("data-mibbi-session")==="signed-in"?!session:!!session;});document.querySelectorAll("[data-mibbi-email]").forEach(function(el){el.textContent=session&&session.user?session.user.email||"":"";});}
+function saveSession(value,restoring){if(!restoring)sessionChanged=true;clearTimeout(timer);session=value&&value.access_token?value:null;if(session&&!session.expires_at)session.expires_at=Math.floor(Date.now()/1000)+(session.expires_in||3600);bridge("mibbi-database-session:set",{session:session});renderSession();if(session)timer=setTimeout(function(){refresh().catch(function(){saveSession(null);reload();});},Math.max(1000,(session.expires_at-Math.floor(Date.now()/1000)-60)*1000));}
+function refresh(){if(pendingRefresh)return pendingRefresh;if(!session||!session.refresh_token)return Promise.reject(Error("Please sign in again."));pendingRefresh=call("/auth/v1/token?grant_type=refresh_token",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({refresh_token:session.refresh_token})}).then(saveSession).finally(function(){pendingRefresh=null;});return pendingRefresh;}
+async function upload(file){
+ if(!session||!config.contract.storage)throw Error("Sign in before uploading a file.");
+ if(file.size>5242880||!["image/jpeg","image/png","image/webp","application/pdf"].includes(file.type))throw Error("Choose a JPEG, PNG, WebP or PDF up to 5 MB.");
+ var ext={"image/jpeg":"jpg","image/png":"png","image/webp":"webp","application/pdf":"pdf"}[file.type];
+ var name=session.user.id+"/"+crypto.randomUUID()+"."+ext;
+ await call("/storage/v1/object/"+ns+"/"+name,{method:"POST",headers:{"Content-Type":file.type,"x-upsert":"false"},body:file});return name;
+}
+async function fileLink(el,path){
+ if(!session||typeof path!=="string"||!path.startsWith(session.user.id+"/")||!/^([0-9a-f-]{36})\/([0-9a-f-]{36})\.(jpg|png|webp|pdf)$/.test(path))return;
+ try{var result=await call("/storage/v1/object/sign/"+ns+"/"+path,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({expiresIn:60})});var signed=result.signedURL||result.signedUrl;if(typeof signed!=="string")return;var url=new URL(signed.startsWith("/object/")?"/storage/v1"+signed:signed,base+"/storage/v1/");if(url.origin!==base||url.pathname!=="/storage/v1/object/sign/"+ns+"/"+path)return;el.href=url.href;el.target="_blank";el.rel="noopener noreferrer";}catch{el.removeAttribute("href");}
+}
+async function load(entry){
+ var t=table(entry.name);entry.root.querySelectorAll("[data-mibbi-record]").forEach(function(el){el.remove();});
+ if(!t)return;
+ if(!connected){status(entry.root,"Connect a database to show saved records.");return;}
+ if(t.access==="owner"&&!session){status(entry.root,"Sign in to see your records.");return;}
+ try{var rows=await call("/rest/v1/"+ns+"_"+t.name+"?select=*&order=created_at.desc&limit=100",{method:"GET"});
+ if(!Array.isArray(rows))throw Error("Records could not be loaded.");status(entry.root,rows.length?"":"No records yet.");
+ rows.forEach(function(row){var el=entry.template.cloneNode(true);el.setAttribute("data-mibbi-record",row.id);el.removeAttribute("hidden");
+ el.querySelectorAll("[data-mibbi-field]").forEach(function(field){var c=t.columns.find(function(c){return c.name===field.getAttribute("data-mibbi-field");});if(!c)return;field.textContent=row[c.name]===null||row[c.name]===undefined?"":String(row[c.name]);if(c.type==="file"&&field.tagName==="A"){field.textContent="Download file";fileLink(field,row[c.name]);}});
+ el.querySelectorAll("input,textarea,select").forEach(function(input){var c=t.columns.find(function(c){return c.name===input.name;});if(!c||input.type==="file")return;if(input.type==="checkbox")input.checked=!!row[c.name];else input.value=row[c.name]===null?"":String(row[c.name]??"");});
+ el.querySelectorAll("form,[data-mibbi-delete]").forEach(function(control){control.setAttribute("data-mibbi-record-id",row.id);if(!session||session.user.id!==row.owner_id)control.hidden=true;});entry.root.appendChild(el);});
+ }catch(error){status(entry.root,message(error));}
+}
+function reload(){return Promise.all(lists.map(load));}
+document.querySelectorAll("[data-mibbi-list]").forEach(function(root){var template=root.querySelector("[data-mibbi-row]");if(!template)return;template.remove();lists.push({root:root,template:template,name:root.getAttribute("data-mibbi-list")});});
+async function submitForm(form){
+ if(!(form instanceof HTMLFormElement))return;
+ var action=form.getAttribute("data-mibbi-form"), submit=form.querySelector("button[type=submit],button:not([type])");
+ if(form.dataset.busy)return;if(!form.reportValidity())return;form.dataset.busy="true";if(submit)submit.disabled=true;status(form,"Working…");
+ try{
+ if(action==="login"||action==="signup"){
+ var data=new FormData(form),email=String(data.get("email")||""),password=String(data.get("password")||"");
+ if(password.length<8)throw Error("Use a password with at least 8 characters.");
+ var result=await call(action==="login"?"/auth/v1/token?grant_type=password":"/auth/v1/signup",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({email:email,password:password})});saveSession(result);form.reset();status(form,session?"Signed in.":"Check your email to confirm your account, then sign in.");await reload();
+ }else{
+ if(!session)throw Error("Sign in before saving a record.");
+ var parts=(action||"").split(":"),t=table(parts[1]);if(!t||!["insert","update"].includes(parts[0]))throw Error("This form is not connected to a database table.");
+ var uploaded=[],payload={},fd=new FormData(form);for(var c of t.columns){if(!fd.has(c.name))continue;var v=fd.get(c.name);if(c.type==="file"){if(v instanceof File&&v.size){payload[c.name]=await upload(v);uploaded.push(payload[c.name]);}}
+ else if(c.type==="number"){if(!String(v).trim()){payload[c.name]=null;}else{var n=Number(v);if(!Number.isFinite(n))throw Error("Enter a valid number.");payload[c.name]=n;}}
+ else if(c.type==="boolean")payload[c.name]=v==="on"||v==="true";
+ else {v=String(v);if(v.length>10000)throw Error("Keep each field under 10,000 characters.");payload[c.name]=v||null;}}
+ t.columns.filter(function(c){return c.type==="boolean";}).forEach(function(c){if(form.elements.namedItem(c.name)&&!fd.has(c.name))payload[c.name]=false;});
+ var record=form.getAttribute("data-mibbi-record-id"),updating=parts[0]==="update";if(updating&&!/^[0-9a-f-]{36}$/.test(record||""))throw Error("Choose a saved record to edit.");
+ if(!updating)payload.owner_id=session.user.id;
+ var saved=await call("/rest/v1/"+ns+"_"+t.name+(updating?"?id=eq."+record:""),{method:updating?"PATCH":"POST",headers:{"Content-Type":"application/json",Prefer:"return=representation"},body:JSON.stringify(payload)});
+ if(!Array.isArray(saved)||saved.length!==1)throw Error("The record was not saved. Check your access and try again.");uploaded=[];if(!updating)form.reset();status(form,"Saved.");await reload();
+ }
+ }catch(error){if(uploaded&&uploaded.length){try{await call("/storage/v1/object/"+ns,{method:"DELETE",headers:{"Content-Type":"application/json"},body:JSON.stringify({prefixes:uploaded})});}catch{}}status(form,message(error));}finally{delete form.dataset.busy;if(submit)submit.disabled=false;}
+
+}
+// Native submission stays blocked by the sandbox. Click and Enter use the
+// validated host action without allowing arbitrary form navigation.
+document.addEventListener("submit",function(event){event.preventDefault();submitForm(event.target);});
+document.addEventListener("click",function(event){var button=event.target instanceof Element?event.target.closest("button"):null;if(button&&button.type==="submit"&&button.form&&!button.hasAttribute("data-mibbi-action")&&!button.hasAttribute("data-mibbi-delete")){event.preventDefault();submitForm(button.form);}},true);
+document.addEventListener("keydown",function(event){var input=event.target;if(event.key==="Enter"&&!event.isComposing&&input instanceof HTMLInputElement&&input.form&&!["checkbox","file"].includes(input.type)){event.preventDefault();submitForm(input.form);}});
+document.addEventListener("click",async function(event){var el=event.target instanceof Element?event.target.closest("[data-mibbi-action],[data-mibbi-delete]"):null;if(!el)return;event.preventDefault();if(el.disabled)return;el.disabled=true;
+ try{if(el.getAttribute("data-mibbi-action")==="logout"){try{if(session)await call("/auth/v1/logout",{method:"POST"});}finally{saveSession(null);await reload();}}
+ else{var name=el.getAttribute("data-mibbi-delete"),id=el.getAttribute("data-mibbi-record-id");if(!session||!table(name)||!/^[0-9a-f-]{36}$/.test(id||""))throw Error("Choose one of your saved records.");if(!confirm("Delete this saved record?"))return;var deleted=await call("/rest/v1/"+ns+"_"+name+"?id=eq."+id,{method:"DELETE",headers:{Prefer:"return=representation"}});if(!Array.isArray(deleted)||deleted.length!==1)throw Error("The record could not be deleted.");await reload();}
+ }catch(error){status(el.closest("[data-mibbi-list]")||el.parentElement,message(error));}finally{el.disabled=false;}
+});
+window.addEventListener("message",function(event){if(event.source!==window.parent||event.origin!==parentOrigin||event.data?.type!=="mibbi-database-session:restore"||event.data.scope!==scope||sessionChanged)return;var s=event.data.session;if(s!==null&&!(s&&typeof s.access_token==="string"&&typeof s.refresh_token==="string"&&s.user&&/^[0-9a-f-]{36}$/.test(s.user.id)))return;saveSession(s,true);if(session&&session.expires_at<=Math.floor(Date.now()/1000)+60)refresh().then(reload).catch(function(){saveSession(null);reload();});else reload();});
+document.addEventListener("click",function(event){var a=event.target instanceof Element?event.target.closest("a[href]"):null;if(!a||window.parent===window||!scope)return;var href=a.getAttribute("href")||"",parts=href.split("#"),path=parts[0],page=(config.pages||[]).find(function(p){return path===p.href||path==="./"+p.href;});if(page){event.preventDefault();bridge("mibbi-database-page",{slug:page.slug,hash:parts.length>1?"#"+parts[1]:""});}});
+renderSession();bridge("mibbi-database-session:get");reload();
+})();</script></body></html>

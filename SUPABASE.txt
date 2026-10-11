@@ -1,0 +1,8 @@
+Customer-owned Supabase integration
+
+This export uses the connected Supabase project's publishable key. It contains no management tokens or secret keys.
+Serve this export over HTTPS. Do not open it as file:// for database features.
+Customer authentication, records and private files remain in Supabase; they are not copied into this ZIP.
+SQL is generated from the approved plan; take backups before applying changes. Mibbi never generates destructive table/column changes.
+Each customer sees/edits their own private records. Public tables allow public reads. All writes require login.
+Private uploads support JPEG, PNG, WebP and PDF up to 5 MB. Configure Auth email confirmations and SMTP in Supabase.

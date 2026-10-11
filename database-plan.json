@@ -1,0 +1,33 @@
+{
+  "auth": true,
+  "tables": [
+    {
+      "name": "notes",
+      "access": "owner",
+      "columns": [
+        {
+          "name": "title",
+          "type": "text"
+        },
+        {
+          "name": "amount",
+          "type": "number"
+        },
+        {
+          "name": "done",
+          "type": "boolean"
+        },
+        {
+          "name": "day",
+          "type": "date"
+        },
+        {
+          "name": "attachment",
+          "type": "file"
+        }
+      ]
+    }
+  ],
+  "storage": true,
+  "version": 1
+}
